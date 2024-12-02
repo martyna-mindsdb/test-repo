@@ -33,6 +33,9 @@ jobs:
           # Update release notes
           UPDATED_BODY="${BODY}\n\nupdated by GH action"
 
+          # Escape special characters in UPDATED_BODY
+          ESCAPED_BODY=$(echo "$UPDATED_BODY" | jq -R '.')
+
           # Get release ID
           RELEASE_ID=$(echo "$RELEASE" | jq -r '.id')
 
@@ -40,5 +43,5 @@ jobs:
           curl -s -X PATCH \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"body\": \"$UPDATED_BODY\"}" \
+            -d "{\"body\": $ESCAPED_BODY}" \
             "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID"
