@@ -1,0 +1,41 @@
+name: Update Release Notes
+
+on:
+  release:
+    types:
+      - published  # Trigger when a new release is published
+
+jobs:
+  update-release-notes:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Update release notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the release tag from the event payload
+          TAG_NAME=$(jq -r '.release.tag_name' < "$GITHUB_EVENT_PATH")
+
+          # Fetch release data
+          RELEASE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME")
+
+          # Extract current release notes
+          BODY=$(echo "$RELEASE" | jq -r '.body')
+
+          # Update release notes
+          UPDATED_BODY="${BODY}\n\nupdated by GH action"
+
+          # Get release ID
+          RELEASE_ID=$(echo "$RELEASE" | jq -r '.id')
+
+          # Update release notes using GitHub API
+          curl -s -X PATCH \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"body\": \"$UPDATED_BODY\"}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID"
