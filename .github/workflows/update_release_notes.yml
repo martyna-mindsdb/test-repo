@@ -2,36 +2,31 @@ name: Update Release Notes
 
 on:
   release:
-    types: [published]
-
-permissions:
-  contents: write  # Required for accessing and updating releases
+    types:
+      - published  # Trigger when a new release is published
 
 jobs:
-  update-release-notes:
+  get-release-notes:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code repository
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Get the latest release notes using GitHub API
-      - name: Get latest release details
-        id: release_details
+      - name: Fetch release notes of latest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          release_data=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
-          release_notes=$(echo $release_data | jq -r '.body')
+          # Extract the release tag from the event payload
+          TAG_NAME=$(jq -r '.release.tag_name' < "$GITHUB_EVENT_PATH")
+          echo "Release tag: $TAG_NAME"
 
-          echo "release_notes=$release_notes" >> $GITHUB_ENV
+          # Fetch the release data using GitHub API
+          RELEASE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME")
 
-      # Step 3: Append text to the release notes
-      - name: Append text to release notes
-        run: |
-          updated_notes="${{ env.release_notes }}\n\nupdated by gh action"
-          
-          # Update release with new notes using GitHub API
-          curl -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -d "{\"body\":\"$updated_notes\"}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/${{ github.event.release.id }}"
+          # Extract the release notes (raw body)
+          RELEASE_NOTES=$(echo "$RELEASE" | jq -r '.body')
+
+          # Output the release notes to the logs
+          echo "Release Notes:\n$RELEASE_NOTES"
