@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Fetch and update release notes of latest release
+      - name: Fetch release notes of latest release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -32,10 +32,10 @@ jobs:
           UPDATED_RELEASE_NOTES="${RELEASE_NOTES}\n\nUpdated by GH Action"
 
           # Output the release notes to the logs
-          echo "Original release Notes:\n$RELEASE_NOTES"
-          echo "Updated release Notes:\n$UPDATED_RELEASE_NOTES"
+          echo "Original release notes:\n$RELEASE_NOTES"
+          echo "Updated release notes:\n$UPDATED_RELEASE_NOTES"
 
-      - name: Enhance Release Notes with LLM
+      - name: Enhance release notes with LLM
         id: enhance_notes
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -47,7 +47,7 @@ jobs:
             "messages": [
               {
                 "role": "system",
-                "content": "You are an assistant tasked with enhancing GitHub release notes. Improve readability and style while retaining all PR links unchanged."
+                "content": "Follow the instructions to update the GitHub release notes provided below. 1. Write a section titled "TL;DR" that describes everything contained in the "What's Changed" section. Make this "TL;DR" section informative and divide information into sections of related items. 2. The input comes in the Markdown format as below. Generate the output in the Markdown format as well. 3. Final format should adhere to the following: - start with the "TL;DR" section, which is a summary of the "What's Changed" section, - follow it with the "What's Changed" section, and DO NOT change the provided "What's Changed" section, - generate a Markdown format output that concatenates these two sections."
               },
               {
                 "role": "user",
@@ -65,11 +65,21 @@ jobs:
             -d "$payload")
 
           # Extract enhanced notes from the API response
-          enhanced_notes=$(echo "$response" | jq -r '.choices[0].message.content')
+          ENHANCED_NOTES=$(echo "$response" | jq -r '.choices[0].message.content')
 
           if [ -z "$enhanced_notes" ]; then
             echo "LLM enhancement failed. Exiting."
             exit 1
           fi
 
-          echo "ENHANCED_NOTES=$enhanced_notes" >> $GITHUB_ENV
+          echo "Enhanced release notes:\n$ENHANCED_NOTES"
+
+      - name: Update Release Notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Write enhanced notes to a file
+          echo "${{ env.ENHANCED_NOTES }}" > enhanced_notes.md
+
+          # Update the release with the enhanced notes
+          gh release edit ${{ env.RELEASE_TAG }} --notes-file enhanced_notes.md
