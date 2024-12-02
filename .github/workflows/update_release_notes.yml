@@ -19,29 +19,54 @@ jobs:
       - name: Update release notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
+        run:
           # Get the release tag from the event payload
           TAG_NAME=$(jq -r '.release.tag_name' < "$GITHUB_EVENT_PATH")
+          echo "Tag name: $TAG_NAME"
 
           # Fetch release data
           RELEASE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME")
+          echo "Fetched release data: $RELEASE"
 
           # Extract current release notes
           BODY=$(echo "$RELEASE" | jq -r '.body')
+          echo "Current release notes: $BODY"
+
+          # Fallback to empty string if BODY is null
+          BODY=${BODY:-""}
 
           # Update release notes
-          UPDATED_BODY="${BODY}\n\nupdated by GH action"
+          UPDATED_BODY="${BODY}\n\nUpdated by GitHub Action"
 
           # Escape special characters in UPDATED_BODY
           ESCAPED_BODY=$(echo "$UPDATED_BODY" | jq -R '.')
 
           # Get release ID
           RELEASE_ID=$(echo "$RELEASE" | jq -r '.id')
+          echo "Release ID: $RELEASE_ID"
+
+          # Validate that RELEASE_ID is not null
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "Error: Release ID is null. Exiting."
+            exit 1
+          fi
+
+          # Debug the JSON payload
+          echo "JSON Payload: {\"body\": $ESCAPED_BODY}"
 
           # Update release notes using GitHub API
-          curl -s -X PATCH \
+          RESPONSE=$(curl -s -X PATCH \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"body\": $ESCAPED_BODY}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID"
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID")
+          echo "API Response: $RESPONSE"
+
+          # Check for success
+          if echo "$RESPONSE" | jq -e '.message' >/dev/null 2>&1; then
+            echo "Error updating release notes: $(echo "$RESPONSE" | jq -r '.message')"
+            exit 1
+          fi
+
+          echo "Release notes successfully updated!"
