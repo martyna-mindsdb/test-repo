@@ -5,6 +5,9 @@ on:
     types:
       - published  # Trigger when a new release is published
 
+permissions:
+  contents: write  # Required for accessing and updating releases
+
 jobs:
   update-release-notes:
     runs-on: ubuntu-latest
