@@ -16,13 +16,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Update release notes
+      - name: Debug Event Payload
+        run: |
+          echo "Contents of GITHUB_EVENT_PATH:"
+          cat $GITHUB_EVENT_PATH
+
+      - name: Install jq (if needed)
+        run: sudo apt-get install -y jq
+
+      - name: Extract Tag Name and Debug
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: |
+          # Extract the tag name from the event payload
+          TAG_NAME=$(jq -r '.release.tag_name' < "$GITHUB_EVENT_PATH")
+
+          # Validate TAG_NAME
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "null" ]; then
+            echo "Error: Tag name is null or empty. Event payload might be invalid."
+            exit 1
+          fi
+
+          echo "Tag name: $TAG_NAME"
+
+      - name: Update Release Notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run:
-          # Get the release tag from the event payload
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: |
+          # Extract the tag name from the event payload
           TAG_NAME=$(jq -r '.release.tag_name' < "$GITHUB_EVENT_PATH")
-          echo "Tag name: $TAG_NAME"
 
           # Fetch release data
           RELEASE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
@@ -31,10 +54,10 @@ jobs:
 
           # Extract current release notes
           BODY=$(echo "$RELEASE" | jq -r '.body')
-          echo "Current release notes: $BODY"
 
           # Fallback to empty string if BODY is null
           BODY=${BODY:-""}
+          echo "Current release notes: $BODY"
 
           # Update release notes
           UPDATED_BODY="${BODY}\n\nUpdated by GitHub Action"
@@ -70,3 +93,7 @@ jobs:
           fi
 
           echo "Release notes successfully updated!"
+
+      - name: Print Environment Variables (for Debugging)
+        if: always()  # Always run to help with debugging if any step fails
+        run: env
