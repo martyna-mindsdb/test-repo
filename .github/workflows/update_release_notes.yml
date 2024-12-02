@@ -34,3 +34,42 @@ jobs:
           # Output the release notes to the logs
           echo "Original release Notes:\n$RELEASE_NOTES"
           echo "Updated release Notes:\n$UPDATED_RELEASE_NOTES"
+
+      - name: Enhance Release Notes with LLM
+        id: enhance_notes
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          # Prepare the LLM API payload
+          payload=$(cat <<EOF
+          {
+            "model": "gpt-4",
+            "messages": [
+              {
+                "role": "system",
+                "content": "You are an assistant tasked with enhancing GitHub release notes. Improve readability and style while retaining all PR links unchanged."
+              },
+              {
+                "role": "user",
+                "content": "${{ env.RAW_NOTES }}"
+              }
+            ]
+          }
+          EOF
+          )
+
+          # Call the OpenAI API
+          response=$(curl -s -X POST https://api.openai.com/v1/chat/completions \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+
+          # Extract enhanced notes from the API response
+          enhanced_notes=$(echo "$response" | jq -r '.choices[0].message.content')
+
+          if [ -z "$enhanced_notes" ]; then
+            echo "LLM enhancement failed. Exiting."
+            exit 1
+          fi
+
+          echo "ENHANCED_NOTES=$enhanced_notes" >> $GITHUB_ENV
