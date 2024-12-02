@@ -2,8 +2,7 @@ name: Update Release Notes
 
 on:
   release:
-    types:
-      - published  # Trigger when a new release is published
+    types: [published]
 
 permissions:
   contents: write  # Required for accessing and updating releases
@@ -13,87 +12,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      # Step 1: Checkout the code repository
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Debug Event Payload
+      # Step 2: Get the latest release notes using GitHub API
+      - name: Get latest release details
+        id: release_details
         run: |
-          echo "Contents of GITHUB_EVENT_PATH:"
-          cat $GITHUB_EVENT_PATH
+          release_data=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+          release_notes=$(echo $release_data | jq -r '.body')
 
-      - name: Install jq (if needed)
-        run: sudo apt-get install -y jq
+          echo "release_notes=$release_notes" >> $GITHUB_ENV
 
-      - name: Extract Tag Name and Debug
-        env:
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
+      # Step 3: Append text to the release notes
+      - name: Append text to release notes
         run: |
-          # Extract the tag name from the event payload
-          TAG_NAME=$(jq -r '.release.tag_name' < "$GITHUB_EVENT_PATH")
-
-          # Validate TAG_NAME
-          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "null" ]; then
-            echo "Error: Tag name is null or empty. Event payload might be invalid."
-            exit 1
-          fi
-
-          echo "Tag name: $TAG_NAME"
-
-      - name: Update Release Notes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_EVENT_PATH: ${{ github.event_path }}
-        run: |
-          # Extract the tag name from the event payload
-          TAG_NAME=$(jq -r '.release.tag_name' < "$GITHUB_EVENT_PATH")
-
-          # Fetch release data
-          RELEASE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME")
-          echo "Fetched release data: $RELEASE"
-
-          # Extract current release notes
-          BODY=$(echo "$RELEASE" | jq -r '.body')
-
-          # Fallback to empty string if BODY is null
-          BODY=${BODY:-""}
-          echo "Current release notes: $BODY"
-
-          # Update release notes
-          UPDATED_BODY="${BODY}\n\nUpdated by GitHub Action"
+          updated_notes="${{ env.release_notes }}\n\nupdated by gh action"
           
-          # Escape special characters (including newlines and quotes) for JSON
-          ESCAPED_BODY=$(echo "$UPDATED_BODY" | jq -R .)
-
-          # Get release ID
-          RELEASE_ID=$(echo "$RELEASE" | jq -r '.id')
-          echo "Release ID: $RELEASE_ID"
-
-          # Validate that RELEASE_ID is not null
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "Error: Release ID is null. Exiting."
-            exit 1
-          fi
-
-          # Debug the JSON payload
-          echo "JSON Payload: {\"body\": $ESCAPED_BODY}"
-
-          # Update release notes using GitHub API
-          RESPONSE=$(curl -s -X PATCH \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "{\"body\": $ESCAPED_BODY}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID")
-          echo "API Response: $RESPONSE"
-
-          # Check for success
-          if echo "$RESPONSE" | jq -e '.message' >/dev/null 2>&1; then
-            echo "Error updating release notes: $(echo "$RESPONSE" | jq -r '.message')"
-            exit 1
-          fi
-
-          echo "Release notes successfully updated!"
-
-      - name: Print Environment Variables (for Debugging)
-        if: always()  # Always run to help with debugging if any step fails
-        run: env
+          # Update release with new notes using GitHub API
+          curl -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -d "{\"body\":\"$updated_notes\"}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/${{ github.event.release.id }}"
