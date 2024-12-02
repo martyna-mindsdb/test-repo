@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Fetch release notes of latest release
+      - name: Fetch and update release notes of latest release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -28,5 +28,9 @@ jobs:
           # Extract the release notes (raw body)
           RELEASE_NOTES=$(echo "$RELEASE" | jq -r '.body')
 
+          # Update the release notes (raw body)
+          UPDATED_RELEASE_NOTES="${RELEASE_NOTES}\n\nUpdated by GH Action"
+
           # Output the release notes to the logs
-          echo "Release Notes:\n$RELEASE_NOTES"
+          echo "Original release Notes:\n$RELEASE_NOTES"
+          echo "Updated release Notes:\n$UPDATED_RELEASE_NOTES"
