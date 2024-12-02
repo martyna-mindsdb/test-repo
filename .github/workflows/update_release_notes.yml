@@ -61,9 +61,9 @@ jobs:
 
           # Update release notes
           UPDATED_BODY="${BODY}\n\nUpdated by GitHub Action"
-
-          # Escape special characters in UPDATED_BODY
-          ESCAPED_BODY=$(echo "$UPDATED_BODY" | jq -R '.')
+          
+          # Escape special characters (including newlines and quotes) for JSON
+          ESCAPED_BODY=$(echo "$UPDATED_BODY" | jq -R .)
 
           # Get release ID
           RELEASE_ID=$(echo "$RELEASE" | jq -r '.id')
